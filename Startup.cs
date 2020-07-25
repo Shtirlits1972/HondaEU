@@ -45,6 +45,7 @@ namespace HondaEU
             app.UseRouting();
 
             app.UseAuthorization();
+            app.UseFileServer(enableDirectoryBrowsing: true);
 
             app.UseEndpoints(endpoints =>
             {

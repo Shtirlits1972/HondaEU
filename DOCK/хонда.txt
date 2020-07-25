@@ -1,0 +1,17 @@
+хонда евро: для списка фильтров (/filters) используем таблицу pmotyt
+фильтры делаем по полям 
+1. cmodnamepc (в API: code=model_id, name=cmodnamepc)
+2. dmodyr
+3. xcardrs
+4. ctrsmtyp
+5. carea
+6. nengnpf
+7. cmftrepc
+8. xgradefulnam (в API: code=xgradefulnam_id)
+индексы (в API code) делаем равным значению соотв поля, пробелы заменяем на _
+
+для списка авто по фильтрам (/filter-cars) и эту же таблицу pmotyt
+vehicle_id=hmodtyp
+
+
+для хонды gn_epc аналогично. таблица pl_pmotyt

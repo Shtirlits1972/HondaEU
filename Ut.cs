@@ -15,5 +15,13 @@ namespace HondaEU
             IConfiguration Configuration = builder.Build();
             return Configuration.GetConnectionString("MySQLConnect");
         }
+
+        public static string GetImagePath()
+        {
+            var builder = new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json");
+            IConfiguration Configuration = builder.Build();
+
+            return Configuration.GetSection("MySettings").GetSection("imagePath").Value;
+        }
     }
 }

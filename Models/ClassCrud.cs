@@ -13,6 +13,68 @@ namespace HondaEU.Models
 {
     public class ClassCrud
     {
+        public static List<CarTypeInfo> GetListCarTypeInfo(string vin)
+        {
+            List<CarTypeInfo> list = null;
+
+            try
+            {
+                string nfrmpf = vin.Substring(0, 11);
+                string nfrmseqepc = vin.Substring(9, 8);
+
+                #region strCommand
+                int y = 0;
+
+                string strCommand = " SELECT DISTINCT " +
+                        "  pmotyt.hmodtyp vehicle_id, " +
+                        "  pmotyt.cmodnamepc model_name, " +
+                        "  pmotyt.xcardrs, " +
+                        "  pmotyt.dmodyr, " +
+                        "  pmotyt.xgradefulnam, " +
+                        "  pmotyt.ctrsmtyp, " +
+                        "  pmotyt.cmftrepc, " +
+                        "  pmotyt.carea, " +
+                        "  pmotyt.nengnpf " +
+                        "  FROM pmodlt " +
+                        "     JOIN pmotyt " +
+                        "         ON(pmodlt.cmodnamepc = pmotyt.cmodnamepc " +
+                        "         AND pmodlt.dmodyr = pmotyt.dmodyr " +
+                        "         AND pmodlt.xcardrs = pmotyt.xcardrs), " +
+                        " 	 pmdldt " +
+                        " WHERE(pmotyt.nfrmpf = @nfrmpf ) " +
+                        "     AND(pmotyt.nfrmseqepcstrt <= @nfrmseqepc ) " +
+                        "     AND(pmotyt.nfrmseqepcend >= @nfrmseqepc ) " +
+                        "         AND((NOT EXISTS(SELECT 1 " +
+                        "                             FROM pmdldt " +
+                        "                            WHERE pmdldt.cmodnamepc = pmodlt.cmodnamepc " +
+                        "                              AND pmdldt.dmodyr = pmodlt.dmodyr " +
+                        "                              AND pmdldt.xcardrs = pmodlt.xcardrs " +
+                        "                              AND pmdldt.cmftrepc = pmodlt.cmftrepc) " +
+                        "               AND pmodlt.dmodlnch < now()) " +
+                        "          OR( " +
+                        "                   EXISTS(SELECT 1 " +
+                        "                         FROM pmdldt " +
+                        "                        WHERE pmdldt.cmodnamepc = pmodlt.cmodnamepc " +
+                        "                          AND pmdldt.dmodyr = pmodlt.dmodyr " +
+                        "                          AND pmdldt.xcardrs = pmodlt.xcardrs " +
+                        "                          AND pmdldt.cmftrepc = pmodlt.cmftrepc " +
+                        "                          AND pmdldt.dmodlnch < now())))";
+
+                #endregion
+
+                using (IDbConnection db = new MySqlConnection(strConn))
+                {
+                    list = db.Query<CarTypeInfo>(strCommand, new { nfrmpf, nfrmseqepc }).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                string Error = ex.Message;
+                int o = 0;
+            }
+
+            return list;
+        }
         private static string strConn = Ut.GetMySQLConnect();
         public static readonly string getLang = " SELECT DISTINCT lang.clangjap FROM lang  WHERE lang.code = @code ";
         public static List<ModelCar> GetModelCars()
@@ -116,8 +178,11 @@ namespace HondaEU.Models
                 }
             }
 
-            string strCommand = " SELECT nt.code, nt.group name, nt.node_ids FROM " +
-                                " nodes_tb nt ";
+            //string strCommand = " SELECT nt.code, nt.group name, nt.node_ids FROM " +
+            //                    " nodes_tb nt ";
+
+            string strCommand = " SELECT nt.code, nt.xplblk name, nt.id node_ids FROM " +
+                                " pbldst nt ";
 
             if (!String.IsNullOrEmpty(codes) || !String.IsNullOrEmpty(node_ids))
             {
@@ -136,7 +201,7 @@ namespace HondaEU.Models
 
             if (!String.IsNullOrEmpty(node_ids))
             {
-                strCommand += $"  nt.node_ids IN  ({node_ids}) ";
+                strCommand += $"  nt.id IN  ({node_ids}) ";
             }
 
             try
@@ -156,27 +221,27 @@ namespace HondaEU.Models
         public static List<Sgroups> GetSgroups(string vehicle_id, string group_id, string code_lang = "EN")
         {
             List<Sgroups> list = null;
-
-            string[] strArr = group_id.Split("_");
-
-            string nplgrp = strArr[1];
-            string npl = strArr[2];
+            //   pbldst.npl, '_', pblokt.nplblk
+            string npl = group_id.Substring(0, group_id.IndexOf("_"));
+            string nplblk = group_id.Substring(group_id.IndexOf("_") + 1, group_id.Length - (group_id.IndexOf("_") + 1));
 
             try
             {
                 #region strCommand
                 string strCommand = "  SELECT DISTINCT " +
-                                    "   CONCAT(pbldst.npl, '_', pblokt.nplblk) node_id , " +
+                                    //"   CONCAT(pbldst.npl, '_', pblokt.nplblk) node_id , " +
+                                    "   pbldst.id node_id , " +
+
                                     "   pbldst.xplblk  name, " +
                                     "   pblokt.nplblk image_id, " +
                                     " '.png' image_ext " +
                                     "      FROM pblokt " +
-                                    "           JOIN pbldst " +
+                                    "      INNER JOIN pbldst " +
                                     "              ON pblokt.npl = pbldst.npl " +
                                     "             AND pblokt.nplblk = pbldst.nplblk " +
                                     $"             and pbldst.clangjap IN ({getLang}) " +
                                     $"  and pbldst.npl = @npl " +
-                                    $"  WHERE pblokt.nplgrp = @nplgrp and " +
+                                    $"  WHERE pblokt.nplblk = @nplblk and " +
                                     "   (pblokt.nplblk in (SELECT DISTINCT pblmtt.nplblk " +
                                     "   FROM pblmtt   WHERE " +
                                     $" (pblmtt.npl =  @npl ) AND " +
@@ -186,7 +251,7 @@ namespace HondaEU.Models
 
                 using (IDbConnection db = new MySqlConnection(strConn))
                 {
-                    list = db.Query<Sgroups>(strCommand, new { hmodtyp = vehicle_id, nplgrp, npl, code = code_lang }).ToList();
+                    list = db.Query<Sgroups>(strCommand, new { hmodtyp = vehicle_id, nplblk, npl, code = code_lang }).ToList();
                 }
             }
             catch (Exception ex)
@@ -201,8 +266,8 @@ namespace HondaEU.Models
         {
             List<header> list = new List<header>();
 
-            header header1 = new header { code = "vehicle_id", title = "Код типа автомобиля" };
-            list.Add(header1);
+            //header header1 = new header { code = "vehicle_id", title = "Код типа автомобиля" };
+            //list.Add(header1);
             header header2 = new header { code = "model_name", title = "Модель автомобиля" };
             list.Add(header2);
             header header3 = new header { code = "xcardrs", title = "Кол-во дверей" };
@@ -217,22 +282,22 @@ namespace HondaEU.Models
             list.Add(header7);
             header header8 = new header { code = "carea", title = "Страна рынок" };
             list.Add(header8);
+            header header9 = new header { code = "nengnpf", title = "Код двигателя" };
+            list.Add(header9);
 
             return list;
         }
         public static List<PartsGroup> GetPartsGroup(string vehicle_id, string code_lang = "EN")
         {
-            List<PartsGroup> list = null;
+            List<PartsGroup> list = new List<PartsGroup>();
             string strCommand = " SELECT DISTINCT " +
-                                " CONCAT(pgrout.clangjap, '_', pgrout.nplgrp, '_', pblokt.npl) Id, " +
+                                " CONCAT(pgrout.nplgrp, '_', pblokt.npl) group_id, " +
+                                    //" CONCAT(pgrout.clangjap, '_', pgrout.nplgrp, '_', pblokt.npl) group_id, " +
                                 " pgrout.xplgrp name FROM pgrout " +
                                 " LEFT JOIN pblokt ON pgrout.nplgrp = pblokt.nplgrp " +
                                 " LEFT JOIN pblmtt ON pblokt.npl = pblmtt.npl " +
                                 " AND pblokt.nplblk = pblmtt.nplblk " +
-                                " WHERE pgrout.clangjap IN(SELECT DISTINCT " +
-                                " lang.clangjap " +
-                                " FROM lang " +
-                                " WHERE lang.code = @code ) " +
+                               $" WHERE pgrout.clangjap IN({getLang}) " +
                                 " AND EXISTS(SELECT 1 " +
                                 " FROM pblokt, pblmtt " +
                                 " WHERE pblokt.nplgrp = pgrout.nplgrp " +
@@ -250,8 +315,7 @@ namespace HondaEU.Models
 
                 for (int i = 0; i < list.Count; i++)
                 {
-                    List<PartsGroup> listSgroups = GetPartsGroupChild(vehicle_id, list[i].group_id, code_lang);
-                    list[i].childs = listSgroups;
+                    list[i].childs = GetPartsGroupChild(vehicle_id, list[i].group_id, code_lang);
                 }
             }
             catch (Exception ex)
@@ -263,17 +327,12 @@ namespace HondaEU.Models
         }
         public static List<PartsGroup> GetPartsGroupChild(string vehicle_id, string group_id, string code_lang = "EN")
         {
-            List<PartsGroup> list = null;
-
-            string[] strArr = vehicle_id.Split("_");
-
-            string catalog = strArr[0];
-            string catalog_code = strArr[1];
+            List<PartsGroup> list = new List<PartsGroup>();
 
             string[] strArrGroup = group_id.Split("_");
 
-            string nplgrp = strArrGroup[1];
-            string npl = strArrGroup[2];
+            string nplgrp = strArrGroup[0];
+            string npl = strArrGroup[1];
 
             try
             {
@@ -309,26 +368,77 @@ namespace HondaEU.Models
             }
             return list;
         }
-
-        public static List<Filters> GetFilters(string model_id, string[] param)
+        public static List<Filters> GetFilters(string model_id, string xcardrsP, string dmodyrP, string xgradefulnamP, string ctrsmtypP, string cmftrepcP,
+            string careaP, string nengnpfP)
         {
+
             List<Filters> filters = new List<Filters>();
             List<CarTypeInfo> listCarType = new List<CarTypeInfo>();
 
             string strWhereAdd = string.Empty;
 
             string strCommand = " SELECT p.hmodtyp vehicle_id, cmodnamepc model_name,  " +
-                                " xcardrs, dmodyr, xgradefulnam, ctrsmtyp, cmftrepc, carea " +
+                                " xcardrs, dmodyr, xgradefulnam, ctrsmtyp, cmftrepc, carea, nengnpf " +
                                 " FROM pmotyt p WHERE p.cmodnamepc = @model_id  ";
 
-            for(int i=0; i < param.Length; i++)
+
+            if(!String.IsNullOrEmpty(xcardrsP))
             {
-                string maneParam = param[i].Substring(0, param[i].IndexOf("_"));
-                string tmpVal = param[i].Substring(param[i].IndexOf("_")+1);
+                string maneParam = xcardrsP.Substring(0, xcardrsP.IndexOf("_"));
+                string tmpVal = xcardrsP.Substring(xcardrsP.IndexOf("_") + 1);
                 string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
 
-                strCommand += tmpParam;          
+                strCommand += tmpParam;
             }
+            if (!String.IsNullOrEmpty(dmodyrP))
+            {
+                string maneParam = dmodyrP.Substring(0, dmodyrP.IndexOf("_"));
+                string tmpVal = dmodyrP.Substring(dmodyrP.IndexOf("_") + 1);
+                string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                strCommand += tmpParam;
+            }
+            if (!String.IsNullOrEmpty(xgradefulnamP))
+            {
+                string maneParam = xgradefulnamP.Substring(0, xgradefulnamP.IndexOf("_"));
+                string tmpVal = xgradefulnamP.Substring(xgradefulnamP.IndexOf("_") + 1);
+                string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                strCommand += tmpParam;
+            }
+            if (!String.IsNullOrEmpty(ctrsmtypP))
+            {
+                string maneParam = ctrsmtypP.Substring(0, ctrsmtypP.IndexOf("_"));
+                string tmpVal = ctrsmtypP.Substring(ctrsmtypP.IndexOf("_") + 1);
+                string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                strCommand += tmpParam;
+            }
+            if (!String.IsNullOrEmpty(cmftrepcP))
+            {
+                string maneParam = cmftrepcP.Substring(0, cmftrepcP.IndexOf("_"));
+                string tmpVal = cmftrepcP.Substring(cmftrepcP.IndexOf("_") + 1);
+                string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                strCommand += tmpParam;
+            }
+            if (!String.IsNullOrEmpty(careaP))
+            {
+                string maneParam = careaP.Substring(0, careaP.IndexOf("_"));
+                string tmpVal = careaP.Substring(careaP.IndexOf("_") + 1);
+                string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                strCommand += tmpParam;
+            }
+            if (!String.IsNullOrEmpty(nengnpfP))
+            {
+                string maneParam = nengnpfP.Substring(0, nengnpfP.IndexOf("_"));
+                string tmpVal = nengnpfP.Substring(nengnpfP.IndexOf("_") + 1);
+                string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                strCommand += tmpParam;
+            }
+
             try
             {
                 using (IDbConnection db = new MySqlConnection(strConn))
@@ -407,7 +517,7 @@ namespace HondaEU.Models
             #endregion
 
             #region cmftrepc
-            Filters cmftrepcF = new Filters { filter_id = "cmftrepc", code = "cmftrepc", name = "Страна производитель" };
+            Filters cmftrepcF = new Filters { filter_id = "cmftrepc", code = "cmftrepc", name = "Страна пр-ва" };
             List<values> cmftrepc_Val = new List<values>();
 
             string[] cmftrepcArr = listCarType.Select(x => x.cmftrepc).Distinct().ToArray();
@@ -438,7 +548,298 @@ namespace HondaEU.Models
             filters.Add(careaF);
             #endregion
 
+            #region nengnpf
+            Filters nengnpfF = new Filters { filter_id = "nengnpf", code = "nengnpf", name = "Код двигателя" };
+            List<values> nengnpf_Val = new List<values>();
+
+            string[] nengnpfArr = listCarType.Select(x => x.nengnpf).Distinct().ToArray();
+
+            for (int i = 0; i < nengnpfArr.Length; i++)
+            {
+                values nengnpf_tmp = new values { filter_item_id = "nengnpf_" + nengnpfArr[i], name = nengnpfArr[i] };
+                nengnpf_Val.Add(nengnpf_tmp);
+            }
+
+            nengnpfF.values = nengnpf_Val;
+            filters.Add(nengnpfF);
+            #endregion
+
             return filters;
+        }
+        public static List<CarTypeInfo> GetListCarTypeInfoFilterCars(string model_id, string xcardrsP, string dmodyrP, string xgradefulnamP, string ctrsmtypP,
+            string cmftrepcP, string careaP, string nengnpfP)
+        {
+            List<CarTypeInfo> list = null;
+
+            try
+            {
+                #region strCommand
+                string strCommand = "   SELECT DISTINCT " +
+                                    "   p.hmodtyp vehicle_id, " +
+                                    " 	p.cmodnamepc model_name, " +
+                                    " 	p.xcardrs, " +
+                                    " 	p.dmodyr, " +
+                                    " 	p.xgradefulnam, " +
+                                    " 	p.ctrsmtyp, " +
+                                    " 	p.cmftrepc, " +
+                                    "   p.carea, " +
+                                    "   p.nengnpf " +
+                                    "   FROM pmotyt p " +
+                                    "   WHERE p.cmodnamepc = @model_id ";
+
+                if (!String.IsNullOrEmpty(xcardrsP))
+                {
+                    string maneParam = xcardrsP.Substring(0, xcardrsP.IndexOf("_"));
+                    string tmpVal = xcardrsP.Substring(xcardrsP.IndexOf("_") + 1);
+                    string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                    strCommand += tmpParam;
+                }
+                if (!String.IsNullOrEmpty(dmodyrP))
+                {
+                    string maneParam = dmodyrP.Substring(0, dmodyrP.IndexOf("_"));
+                    string tmpVal = dmodyrP.Substring(dmodyrP.IndexOf("_") + 1);
+                    string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                    strCommand += tmpParam;
+                }
+                if (!String.IsNullOrEmpty(xgradefulnamP))
+                {
+                    string maneParam = xgradefulnamP.Substring(0, xgradefulnamP.IndexOf("_"));
+                    string tmpVal = xgradefulnamP.Substring(xgradefulnamP.IndexOf("_") + 1);
+                    string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                    strCommand += tmpParam;
+                }
+                if (!String.IsNullOrEmpty(ctrsmtypP))
+                {
+                    string maneParam = ctrsmtypP.Substring(0, ctrsmtypP.IndexOf("_"));
+                    string tmpVal = ctrsmtypP.Substring(ctrsmtypP.IndexOf("_") + 1);
+                    string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                    strCommand += tmpParam;
+                }
+                if (!String.IsNullOrEmpty(cmftrepcP))
+                {
+                    string maneParam = cmftrepcP.Substring(0, cmftrepcP.IndexOf("_"));
+                    string tmpVal = cmftrepcP.Substring(cmftrepcP.IndexOf("_") + 1);
+                    string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                    strCommand += tmpParam;
+                }
+                if (!String.IsNullOrEmpty(careaP))
+                {
+                    string maneParam = careaP.Substring(0, careaP.IndexOf("_"));
+                    string tmpVal = careaP.Substring(careaP.IndexOf("_") + 1);
+                    string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                    strCommand += tmpParam;
+                }
+                if (!String.IsNullOrEmpty(nengnpfP))
+                {
+                    string maneParam = nengnpfP.Substring(0, nengnpfP.IndexOf("_"));
+                    string tmpVal = nengnpfP.Substring(nengnpfP.IndexOf("_") + 1);
+                    string tmpParam = $" AND p.{maneParam} = '{tmpVal}' ";
+
+                    strCommand += tmpParam;
+                }
+
+                //  nengnpfP
+                #endregion
+
+                using (IDbConnection db = new MySqlConnection(strConn))
+                {
+                    list = db.Query<CarTypeInfo>(strCommand, new { model_id }).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                string Errror = ex.Message;
+                int y = 0;
+            }
+
+            return list;
+        }
+        public static VehiclePropArr GetVehiclePropArr(string vehicle_id)
+        {
+            VehiclePropArr model = null;
+
+            try
+            {
+                #region strCommand
+                string strCommand = "  SELECT DISTINCT " +
+                                    "  p.hmodtyp vehicle_id, " +
+                                    "  p.cmodnamepc model_name, " +
+                                    "  p.xcardrs, " +
+                                    "  p.dmodyr, " +
+                                    "  p.xgradefulnam, " +
+                                    "  p.ctrsmtyp, " +
+                                    "  p.cmftrepc, " +
+                                    "  p.carea, " +
+                                    "  p.nengnpf " + 
+                                    "  FROM pmotyt p " +
+                                    "  WHERE p.hmodtyp = @vehicle_id LIMIT 1; ";
+                #endregion
+
+                using (IDbConnection db = new MySqlConnection(strConn))
+                {
+                    CarTypeInfo carType = db.Query<CarTypeInfo>(strCommand, new { vehicle_id }).FirstOrDefault();
+
+                    List<attributes> list = GetAttributes();
+
+                    list[0].value = carType.model_name;
+                    list[1].value = carType.xcardrs;
+                    list[2].value = carType.dmodyr;
+                    list[3].value = carType.xgradefulnam;
+                    list[4].value = carType.ctrsmtyp;
+                    list[5].value = carType.cmftrepc;
+                    list[6].value = carType.carea;
+                    list[7].value = carType.nengnpf;
+
+                    model = new VehiclePropArr {  model_name = carType.model_name };
+                    model.attributes = list;
+                }
+            }
+            catch (Exception ex)
+            {
+                string Errror = ex.Message;
+                int y = 0;
+            }
+
+            return model;
+        }
+        public static List<attributes> GetAttributes()
+        {
+            List<attributes> list = new List<attributes>();
+
+            attributes cmodnamepc = new attributes { code = "model_name", name = "Модель автомобиля", value = "" };
+            list.Add(cmodnamepc);
+
+            attributes xcardrs = new attributes { code = "xcardrs", name = "Кол-во дверей", value = "" };
+            list.Add(xcardrs);
+
+            attributes dmodyr = new attributes { code = "dmodyr", name = "Год выпуска", value = "" };
+            list.Add(dmodyr);
+
+            attributes xgradefulnam = new attributes { code = "xgradefulnam", name = "Класс", value = "" };
+            list.Add(xgradefulnam);
+
+            attributes ctrsmtyp = new attributes { code = "ctrsmtyp", name = "Тип трансмиссии", value = "" };
+            list.Add(ctrsmtyp);
+
+            attributes cmftrepc = new attributes { code = "cmftrepc", name = "Страна производитель", value = "" };
+            list.Add(cmftrepc);
+
+            attributes carea = new attributes { code = "carea", name = "Страна, рынок", value = "" };
+            list.Add(carea);
+
+            attributes nengnpf = new attributes { code = "nengnpf", name = "Класс двигателя", value = "" };
+            list.Add(nengnpf);
+            //  
+            return list;
+        }
+        public static DetailsInNode GetDetailsInNode(string vehicle_id, string node_id, string lang = "EN")
+        {
+            DetailsInNode detailsInNode = new DetailsInNode { node_id = node_id };
+
+            string imgPath = Ut.GetImagePath();
+
+            string strCommand = " SELECT DISTINCT pbldst.xplblk " +
+                                " FROM " +
+                                " pbldst " +
+                                " WHERE   pbldst.id = @node_id ";
+
+            string strCommDeatil = " SELECT DISTINCT " +
+                                    " ppartt.npartgenu number, " +
+                                    " ppartt.xpartext name, " +
+
+                                    " pblpat.npl,  " +
+                                    " pblpat.nplblk,  " +
+                                    " pblpat.nplpartref " +
+
+                                    " FROM pblpat " +
+                                    " join ppartt on(ppartt.clangjap IN (SELECT DISTINCT lang.clangjap FROM lang WHERE lang.code = @code ) " +
+                                    " and ppartt.npartgenu = pblpat.npartgenu) " +
+                                    " join ppasat on(ppartt.npartgenu = ppasat.npartgenu) " +
+                                    " left outer join pbprmt on(pbprmt.hpartplblk = pblpat.hpartplblk " +
+                                    " and pbprmt.clangjap  IN(SELECT DISTINCT lang.clangjap FROM lang  WHERE lang.code = @code )) " +
+                                    " WHERE pblpat.npl IN(SELECT DISTINCT npl FROM pbldst WHERE pbldst.id = @node_id) AND " +
+                                    " pblpat.nplblk IN(SELECT DISTINCT nplblk FROM pbldst WHERE pbldst.id = @node_id) AND " +
+                                    " ((EXISTS(SELECT pb.hmodtyp " +
+                                    " FROM pbpmtt AS pb " +
+                                    " WHERE pb.hpartplblk = pblpat.hpartplblk AND " +
+                                    " pb.hmodtyp IN(@vehicle_id))) OR " +
+                                    " ((NOT EXISTS(SELECT pb.hmodtyp " +
+                                    " FROM pbpmtt AS pb " +
+                                    " WHERE pb.hpartplblk = pblpat.hpartplblk)) " +
+                                    " AND " +
+                                    " (EXISTS(SELECT pb.hmodtyp " +
+                                    " FROM pblmtt AS pb " +
+                                    " WHERE pb.npl = pblpat.npl AND " +
+                                    " pb.nplblk = pblpat.nplblk AND " +
+                                    " pb.hmodtyp IN( @vehicle_id ))))); ";
+
+
+            string strCommImages = " SELECT DISTINCT CONCAT(pbldst.npl, '_', pbldst.nplblk, '-png') image_id, '.png' ext, " +
+                        $" CONCAT( '{imgPath}', pbldst.npl, '/' , 'IMGE/', pbldst.nplblk, '.png') path " +   //     //    pbldst.npl, 'IMGE+', 
+                        " FROM pbldst WHERE " +
+
+                        " pbldst.nplblk IN ( SELECT DISTINCT nplblk FROM pbldst WHERE pbldst.id = @node_id )  " +
+                        " AND pbldst.npl IN ( SELECT DISTINCT npl FROM pbldst WHERE pbldst.id = @node_id ) " +
+
+                        $" AND pbldst.clangjap IN ({getLang}) ; ";
+
+            try
+            {
+                using (IDbConnection db = new MySqlConnection(strConn))
+                {
+                    detailsInNode.name = db.Query<string>(strCommand, new { node_id, code = lang }).FirstOrDefault();
+                    detailsInNode.parts = db.Query<Detail>(strCommDeatil, new { vehicle_id, node_id, code = lang }).ToList();
+                    detailsInNode.images = db.Query<images>(strCommImages, new { node_id, code = lang }).ToList();
+                }
+
+                for (int i = 0; i < detailsInNode.parts.Count; i++)
+                {
+                    detailsInNode.parts[i].hotspots = GetHotspots(detailsInNode.parts[i].nplblk, detailsInNode.parts[i].npl, detailsInNode.parts[i].nplpartref);
+                }
+            }
+            catch (Exception ex)
+            {
+                string Error = ex.Message;
+                int y = 0;
+            }
+
+            return detailsInNode;
+        }
+        public static List<hotspots> GetHotspots(string illustrationnumber, string npl, string partreferencenumber)
+        {
+            List<hotspots> list = new List<hotspots>();
+            try
+            {
+                #region strCommand
+                string strCommand = "   SELECT " +
+                                    "   h.partreferencenumber hotspot_id, " +
+                                    "   CONCAT(h.npl, '_', h.illustrationnumber, '-', 'png' ) image_id, " +
+                                    "   h.max_x x2, " +
+                                    "   h.max_y y2, " +
+                                    "   h.min_x x1, " +
+                                    "   h.min_y y1  " +
+                                    "   FROM hotspots h " +
+                                    " WHERE h.illustrationnumber = @illustrationnumber " +
+                                    " AND h.npl = @npl  AND h.partreferencenumber = @partreferencenumber;  ";
+                #endregion
+                using (IDbConnection db = new MySqlConnection(strConn))
+                {
+                    list = db.Query<hotspots>(strCommand, new { illustrationnumber, npl, partreferencenumber }).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                string Errror = ex.Message;
+                int o = 0;
+            }
+
+            return list;
         }
     }
 }
